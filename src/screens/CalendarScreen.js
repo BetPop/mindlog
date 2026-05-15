@@ -1,0 +1,273 @@
+import React, { useState, useMemo } from 'react';
+import { View, TouchableOpacity, ScrollView, Text } from 'react-native';
+import { Plus, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import ScreenContainer from '../components/ScreenContainer';
+import AppHeader from '../components/AppHeader';
+import Button from '../components/Button';
+import Card from '../components/Card';
+import { Body, Subheading, Caption } from '../components/Typography';
+import { SCREENS } from '../constants/screens';
+import { useTheme } from '../context/ThemeContext';
+
+// Mock data for entries indexed by YYYY-MM-DD
+const MOCK_ENTRIES = {
+  '2025-04-15': [
+    {
+      id: '1',
+      emoji: '😊',
+      time: '9:42 PM',
+      text: 'Today was surprisingly productive. I woke up early and managed to get...',
+      tags: ['Work', 'Exercise', 'Friends']
+    },
+    {
+      id: '2',
+      emoji: '😐',
+      time: '2:15 PM',
+      text: 'Lunch break reflection. Feeling a bit overwhelmed with the project deadline...',
+      tags: ['Work', 'Stress']
+    }
+  ],
+  '2025-04-01': [
+    {
+      id: '3',
+      emoji: '😌',
+      time: '10:00 AM',
+      text: 'Started the month with a clear head. Meditation works wonders.',
+      tags: ['Mindfulness']
+    }
+  ],
+  '2025-04-03': [
+    {
+      id: '4',
+      emoji: '😡',
+      time: '5:30 PM',
+      text: 'Traffic was terrible today. Need to find a better route.',
+      tags: ['Commute', 'Stress']
+    }
+  ],
+  '2025-04-05': [
+    {
+      id: '5',
+      emoji: '😴',
+      time: '11:00 PM',
+      text: 'So tired. Going to bed early today.',
+      tags: ['Rest']
+    }
+  ]
+};
+
+export default function CalendarScreen() {
+  const navigation = useNavigation();
+  const { theme, colors } = useTheme();
+  
+  // State for the month we are viewing
+  const [viewDate, setViewDate] = useState(new Date(2025, 3, 15)); // Default to April 2025 for mock demo
+  // State for the day selected in the grid
+  const [selectedDate, setSelectedDate] = useState(new Date(2025, 3, 15));
+
+  const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  // Helper to format date as YYYY-MM-DD for data lookup
+  const formatDateKey = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const selectedDateKey = formatDateKey(selectedDate);
+  const currentEntries = MOCK_ENTRIES[selectedDateKey] || [];
+
+  // Generate the calendar grid for the current viewDate
+  const calendarDays = useMemo(() => {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    // Previous month's trailing days
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    const prevMonthDays = [];
+    for (let i = firstDayOfMonth - 1; i >= 0; i--) {
+      prevMonthDays.push({
+        day: prevMonthLastDay - i,
+        date: new Date(year, month - 1, prevMonthLastDay - i),
+        current: false
+      });
+    }
+    
+    // Current month's days
+    const currentMonthDays = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      const date = new Date(year, month, i);
+      currentMonthDays.push({
+        day: i,
+        date: date,
+        current: true,
+        dot: MOCK_ENTRIES[formatDateKey(date)] !== undefined
+      });
+    }
+    
+    // Next month's leading days to fill the grid (total 42 cells for 6 rows)
+    const nextMonthDays = [];
+    const remainingCells = 42 - (prevMonthDays.length + currentMonthDays.length);
+    for (let i = 1; i <= remainingCells; i++) {
+      nextMonthDays.push({
+        day: i,
+        date: new Date(year, month + 1, i),
+        current: false
+      });
+    }
+    
+    return [...prevMonthDays, ...currentMonthDays, ...nextMonthDays];
+  }, [viewDate]);
+
+  const changeMonth = (offset) => {
+    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + offset, 1));
+  };
+
+  const isSelected = (date) => {
+    return date.getFullYear() === selectedDate.getFullYear() &&
+           date.getMonth() === selectedDate.getMonth() &&
+           date.getDate() === selectedDate.getDate();
+  };
+
+  return (
+    <ScreenContainer padding={false} scrollable={false} backgroundColor={colors.background}>
+      {/* Header */}
+      <View className="px-6">
+        <AppHeader 
+          title="Calendar" 
+          rightComponent={
+            <Button 
+              icon={Plus}
+              className="w-10 h-10 px-0"
+              onPress={() => navigation.navigate(SCREENS.NEW_ENTRY)}
+            />
+          }
+        />
+      </View>
+
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        {/* Calendar Widget */}
+        <View className="flex-col">
+          {/* Month Header */}
+          <View className="px-6 pt-6 pb-4 flex-row justify-between items-center">
+            <TouchableOpacity 
+              onPress={() => changeMonth(-1)}
+              className="w-10 h-10 rounded-xl justify-center items-center"
+            >
+              <ChevronLeft color={colors.text} size={24} />
+            </TouchableOpacity>
+            <Subheading className="text-lg" style={{ color: colors.text }}>
+              {monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}
+            </Subheading>
+            <TouchableOpacity 
+              onPress={() => changeMonth(1)}
+              className="w-10 h-10 rounded-xl justify-center items-center"
+            >
+              <ChevronRight color={colors.text} size={24} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Grid */}
+          <View className="px-6 pb-6 gap-2 items-center">
+            {/* Weekdays */}
+            <View className="flex-row justify-between w-[318px] px-1">
+              {weekdays.map((d, i) => (
+                <View key={i} className="w-[42px] py-2 items-center">
+                  <Body style={{ color: colors.subtext }}>{d}</Body>
+                </View>
+              ))}
+            </View>
+
+            {/* Days */}
+            <View className="flex-row flex-wrap justify-start w-[318px] gap-0">
+              {calendarDays.map((item, i) => {
+                const active = isSelected(item.date);
+                const hasEntry = item.dot;
+                return (
+                  <TouchableOpacity 
+                    key={i} 
+                    onPress={() => setSelectedDate(item.date)}
+                    className={`w-[45px] h-[45px] justify-center items-center rounded-lg ${active ? '' : ''}`}
+                    style={{ backgroundColor: active ? colors.text : 'transparent' }}
+                  >
+                    <Body 
+                      style={{ 
+                        color: active 
+                          ? colors.background 
+                          : item.current 
+                            ? colors.text 
+                            : colors.border // Dimmed color for non-current month
+                      }}
+                    >
+                      {item.day}
+                    </Body>
+                    {hasEntry && (
+                      <View 
+                        className="w-1 h-1 rounded-full absolute bottom-1" 
+                        style={{ backgroundColor: active ? colors.background : colors.text }} 
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* Entries List */}
+        <View className="px-6 pb-6 gap-4">
+          <View className="flex-row justify-between items-center">
+            <Body className="font-medium" style={{ color: colors.text }}>
+              {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </Body>
+            <Caption style={{ color: colors.subtext }}>{currentEntries.length} entries</Caption>
+          </View>
+
+          <View className="gap-3">
+            {currentEntries.length > 0 ? (
+              currentEntries.map(entry => (
+                <Card 
+                  key={entry.id}
+                  onPress={() => navigation.navigate(SCREENS.ENTRY_DETAIL, { id: entry.id })}
+                  className="flex-row gap-3"
+                  style={{ backgroundColor: colors.card, borderColor: colors.border }}
+                >
+                  <Text className="text-2xl">{entry.emoji}</Text>
+                  <View className="flex-1 gap-2">
+                    <Caption className="leading-3" style={{ color: colors.subtext }}>{entry.time}</Caption>
+                    <Body style={{ color: colors.text }}>
+                      {entry.text}
+                    </Body>
+                    <View className="flex-row flex-wrap gap-1.5">
+                      {entry.tags.map(tag => (
+                        <View key={tag} className="px-2 py-0.5 rounded-lg border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
+                          <Caption style={{ color: colors.text }}>{tag}</Caption>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                </Card>
+              ))
+            ) : (
+              <View 
+                className="py-10 items-center justify-center rounded-lg border border-dashed"
+                style={{ backgroundColor: colors.card, borderColor: colors.border }}
+              >
+                <Body style={{ color: colors.subtext }}>No entries for this day</Body>
+              </View>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+    </ScreenContainer>
+  );
+}
