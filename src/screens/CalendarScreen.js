@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { View, TouchableOpacity, ScrollView, Text } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, TouchableOpacity, ScrollView, Text, Image } from 'react-native';
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import ScreenContainer from '../components/ScreenContainer';
 import AppHeader from '../components/AppHeader';
 import Button from '../components/Button';
@@ -9,62 +9,34 @@ import Card from '../components/Card';
 import { Body, Subheading, Caption } from '../components/Typography';
 import { SCREENS } from '../constants/screens';
 import { useTheme } from '../context/ThemeContext';
+import { useSelector } from 'react-redux';
+import AudioPlayer from '../components/AudioPlayer';
 
-// Mock data for entries indexed by YYYY-MM-DD
-const MOCK_ENTRIES = {
-  '2025-04-15': [
-    {
-      id: '1',
-      emoji: '😊',
-      time: '9:42 PM',
-      text: 'Today was surprisingly productive. I woke up early and managed to get...',
-      tags: ['Work', 'Exercise', 'Friends']
-    },
-    {
-      id: '2',
-      emoji: '😐',
-      time: '2:15 PM',
-      text: 'Lunch break reflection. Feeling a bit overwhelmed with the project deadline...',
-      tags: ['Work', 'Stress']
-    }
-  ],
-  '2025-04-01': [
-    {
-      id: '3',
-      emoji: '😌',
-      time: '10:00 AM',
-      text: 'Started the month with a clear head. Meditation works wonders.',
-      tags: ['Mindfulness']
-    }
-  ],
-  '2025-04-03': [
-    {
-      id: '4',
-      emoji: '😡',
-      time: '5:30 PM',
-      text: 'Traffic was terrible today. Need to find a better route.',
-      tags: ['Commute', 'Stress']
-    }
-  ],
-  '2025-04-05': [
-    {
-      id: '5',
-      emoji: '😴',
-      time: '11:00 PM',
-      text: 'So tired. Going to bed early today.',
-      tags: ['Rest']
-    }
-  ]
-};
+
 
 export default function CalendarScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { theme, colors } = useTheme();
   
+  // Initialize with today's date if no params
+  const initialDate = new Date();
+  
   // State for the month we are viewing
-  const [viewDate, setViewDate] = useState(new Date(2025, 3, 15)); // Default to April 2025 for mock demo
+  const [viewDate, setViewDate] = useState(new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
   // State for the day selected in the grid
-  const [selectedDate, setSelectedDate] = useState(new Date(2025, 3, 15));
+  const [selectedDate, setSelectedDate] = useState(initialDate);
+
+  useEffect(() => {
+    if (route.params?.date) {
+      const passedDate = new Date(route.params.date);
+      // Valid date check
+      if (!isNaN(passedDate.getTime())) {
+        setViewDate(new Date(passedDate.getFullYear(), passedDate.getMonth(), 1));
+        setSelectedDate(passedDate);
+      }
+    }
+  }, [route.params?.date]);
 
   const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const monthNames = [
@@ -80,8 +52,21 @@ export default function CalendarScreen() {
     return `${year}-${month}-${day}`;
   };
 
+  const allEntries = useSelector(state => state.entries.list);
+  
+  const entriesByDate = useMemo(() => {
+    const grouped = {};
+    allEntries.forEach(entry => {
+      // Safely default to a standard date format if missing
+      const dateKey = entry.date || '2025-04-15'; 
+      if (!grouped[dateKey]) grouped[dateKey] = [];
+      grouped[dateKey].push(entry);
+    });
+    return grouped;
+  }, [allEntries]);
+
   const selectedDateKey = formatDateKey(selectedDate);
-  const currentEntries = MOCK_ENTRIES[selectedDateKey] || [];
+  const currentEntries = entriesByDate[selectedDateKey] || [];
 
   // Generate the calendar grid for the current viewDate
   const calendarDays = useMemo(() => {
@@ -110,7 +95,7 @@ export default function CalendarScreen() {
         day: i,
         date: date,
         current: true,
-        dot: MOCK_ENTRIES[formatDateKey(date)] !== undefined
+        dot: entriesByDate[formatDateKey(date)] !== undefined
       });
     }
     
@@ -245,15 +230,34 @@ export default function CalendarScreen() {
                   <View className="flex-1 gap-2">
                     <Caption className="leading-3" style={{ color: colors.subtext }}>{entry.time}</Caption>
                     <Body style={{ color: colors.text }}>
-                      {entry.text}
+                      {entry.text || entry.body}
                     </Body>
-                    <View className="flex-row flex-wrap gap-1.5">
-                      {entry.tags.map(tag => (
-                        <View key={tag} className="px-2 py-0.5 rounded-lg border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
-                          <Caption style={{ color: colors.text }}>{tag}</Caption>
-                        </View>
-                      ))}
-                    </View>
+                    
+                    {entry.imageUri && (
+                      <View className="h-32 w-full rounded-lg overflow-hidden mt-1">
+                        <Image 
+                          source={{ uri: entry.imageUri }} 
+                          className="w-full h-full" 
+                          resizeMode="cover"
+                        />
+                      </View>
+                    )}
+
+                    {entry.audioUri && (
+                      <View className="mt-1">
+                        <AudioPlayer uri={entry.audioUri} />
+                      </View>
+                    )}
+
+                    {entry.tags && entry.tags.length > 0 && (
+                      <View className="flex-row flex-wrap gap-1.5 mt-1">
+                        {entry.tags.map(tag => (
+                          <View key={tag} className="px-2 py-0.5 rounded-lg border" style={{ backgroundColor: colors.background, borderColor: colors.border }}>
+                            <Caption style={{ color: colors.text }}>{tag}</Caption>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
                 </Card>
               ))

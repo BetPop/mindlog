@@ -1,24 +1,91 @@
 import React, { useState } from 'react';
-import { View, TouchableOpacity, ScrollView, TextInput, Text } from 'react-native';
-import { ChevronLeft, Image as ImageIcon, Mic } from 'lucide-react-native';
+import { View, TouchableOpacity, ScrollView, TextInput, Text, Image } from 'react-native';
+import { ChevronLeft, Image as ImageIcon, Mic, Square, Trash2 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useDispatch } from 'react-redux';
+import * as ImagePicker from 'expo-image-picker';
+import { Audio } from 'expo-av';
+import { addEntry } from '../store/slices/entriesSlice';
 import ScreenContainer from '../components/ScreenContainer';
 import Button from '../components/Button';
 import InputField from '../components/InputField';
-import { Body, Subheading } from '../components/Typography';
+import { Body, Subheading, Caption } from '../components/Typography';
 
 export default function NewEntryScreen() {
   const navigation = useNavigation();
+  const dispatch = useDispatch();
   const [selectedMood, setSelectedMood] = useState(1);
   const [entryText, setEntryText] = useState('');
   const [gratitude1, setGratitude1] = useState('');
   const [gratitude2, setGratitude2] = useState('');
   const [gratitude3, setGratitude3] = useState('');
+  const [imageUri, setImageUri] = useState(null);
+  const [recording, setRecording] = useState();
+  const [audioUri, setAudioUri] = useState(null);
 
   const moods = ['😊', '😌', '😔', '😰', '😡', '😴'];
 
   const handleSave = () => {
+    const date = new Date();
+    
+    dispatch(addEntry({
+      title: entryText ? (entryText.substring(0, 30) + (entryText.length > 30 ? '...' : '')) : 'New Journal Entry',
+      body: entryText,
+      date: date.toISOString().split('T')[0],
+      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      mood: moods[selectedMood],
+      emoji: moods[selectedMood],
+      text: entryText,
+      tags: [],
+      imageUri,
+      audioUri
+    }));
+
     navigation.goBack();
+  };
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      await Audio.requestPermissionsAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(recording);
+    } catch (err) {
+      console.error('Failed to start recording', err);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+    setRecording(undefined);
+    await recording.stopAndUnloadAsync();
+    const uri = recording.getURI();
+    setAudioUri(uri);
+  };
+
+  const toggleRecording = () => {
+    if (recording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
   };
 
   return (
@@ -78,15 +145,46 @@ export default function NewEntryScreen() {
               icon={ImageIcon}
               className="flex-1 h-10 px-4"
               textClassName="text-sm"
+              onPress={pickImage}
             />
             <Button 
-              title="Audio"
-              variant="secondary"
-              icon={Mic}
+              title={recording ? "Stop" : "Audio"}
+              variant={recording ? "primary" : "secondary"}
+              icon={recording ? Square : Mic}
               className="flex-1 h-10 px-4"
               textClassName="text-sm"
+              onPress={toggleRecording}
             />
           </View>
+          
+          {/* Media Previews */}
+          {(imageUri || audioUri) && (
+            <View className="mt-2 flex-row gap-2">
+              {imageUri && (
+                <View className="relative w-24 h-24 rounded-lg overflow-hidden border border-[#cbc5bf]">
+                  <Image source={{ uri: imageUri }} className="w-full h-full" />
+                  <TouchableOpacity 
+                    className="absolute top-1 right-1 bg-[#2c2926] rounded-full p-1 opacity-80"
+                    onPress={() => setImageUri(null)}
+                  >
+                    <Trash2 size={12} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              )}
+              {audioUri && (
+                <View className="h-24 w-40 rounded-lg border border-[#cbc5bf] bg-[#fcfbfa] justify-center items-center">
+                  <Mic size={24} color="#2c2926" />
+                  <Caption className="mt-2">Audio Recorded</Caption>
+                  <TouchableOpacity 
+                    className="absolute top-1 right-1 bg-[#2c2926] rounded-full p-1 opacity-80"
+                    onPress={() => setAudioUri(null)}
+                  >
+                    <Trash2 size={12} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
         {/* 3 Good Things Section */}

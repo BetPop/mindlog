@@ -1,27 +1,91 @@
-import React, { useState } from 'react';
-import { View, TouchableOpacity, ScrollView, TextInput, Text } from 'react-native';
-import { ImageIcon, Mic, X, Plus, Trash2 } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, { useState, useEffect } from 'react';
+import { View, TouchableOpacity, ScrollView, TextInput, Text, Image, Alert } from 'react-native';
+import { ImageIcon, Mic, X, Plus, Trash2, Square } from 'lucide-react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import ScreenContainer from '../components/ScreenContainer';
 import Button from '../components/Button';
 import InputField from '../components/InputField';
-import Card from '../components/Card';
 import { Body, Subheading, Caption } from '../components/Typography';
+import { useSelector, useDispatch } from 'react-redux';
+import { updateEntry, removeEntry } from '../store/slices/entriesSlice';
+import * as ImagePicker from 'expo-image-picker';
+import { Audio } from 'expo-av';
+import AudioPlayer from '../components/AudioPlayer';
 
 export default function EntryDetailEditScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const dispatch = useDispatch();
+  const entryId = route.params?.id;
+
+  const existingEntry = useSelector(state => 
+    state.entries.list.find(e => e.id === entryId)
+  );
+
   const [selectedMood, setSelectedMood] = useState(1);
-  const [entryText, setEntryText] = useState("Today was surprisingly productive. I woke up early and managed to get my morning run in before the day got too hectic. The fresh air really helped clear my mind and set a positive tone for the rest of the day. Work was challenging");
+  const [entryText, setEntryText] = useState("");
   const [gratitude1, setGratitude1] = useState('');
   const [gratitude2, setGratitude2] = useState('');
   const [gratitude3, setGratitude3] = useState('');
-  const [tags, setTags] = useState(['Work', 'Friends', 'Productivity', 'Exercise']);
+  const [tags, setTags] = useState([]);
   const [newTag, setNewTag] = useState('');
+  
+  const [imageUri, setImageUri] = useState(null);
+  const [audioUri, setAudioUri] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recording, setRecording] = useState(null);
 
   const moods = ['😊', '😌', '😔', '😰', '😡', '😴'];
 
+  useEffect(() => {
+    if (existingEntry) {
+      setSelectedMood(existingEntry.mood ?? 1);
+      setEntryText(existingEntry.body || existingEntry.text || "");
+      if (existingEntry.gratitude && Array.isArray(existingEntry.gratitude)) {
+        setGratitude1(existingEntry.gratitude[0] || '');
+        setGratitude2(existingEntry.gratitude[1] || '');
+        setGratitude3(existingEntry.gratitude[2] || '');
+      }
+      setTags(existingEntry.tags || []);
+      setImageUri(existingEntry.imageUri || null);
+      setAudioUri(existingEntry.audioUri || null);
+    }
+  }, [existingEntry]);
+
   const handleSave = () => {
+    if (!existingEntry) return;
+
+    const updatedEntry = {
+      ...existingEntry,
+      mood: selectedMood,
+      body: entryText.trim(),
+      gratitude: [gratitude1.trim(), gratitude2.trim(), gratitude3.trim()].filter(g => g !== ''),
+      tags: tags,
+      imageUri,
+      audioUri
+    };
+
+    dispatch(updateEntry(updatedEntry));
     navigation.goBack();
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      "Delete Entry",
+      "Are you sure you want to delete this journal entry?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive",
+          onPress: () => {
+            dispatch(removeEntry(entryId));
+            // Go back twice (from edit screen, and then from detail screen)
+            navigation.pop(2);
+          }
+        }
+      ]
+    );
   };
 
   const removeTag = (index) => {
@@ -36,6 +100,55 @@ export default function EntryDetailEditScreen() {
       setNewTag('');
     }
   };
+
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
+
+  const toggleRecording = async () => {
+    if (isRecording) {
+      setIsRecording(false);
+      if (recording) {
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        setAudioUri(uri);
+        setRecording(null);
+      }
+    } else {
+      try {
+        await Audio.requestPermissionsAsync();
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+        const { recording: newRecording } = await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
+        setRecording(newRecording);
+        setIsRecording(true);
+      } catch (err) {
+        console.error('Failed to start recording', err);
+      }
+    }
+  };
+
+  if (!existingEntry) {
+    return (
+      <ScreenContainer padding={true} scrollable={false}>
+        <Body>Entry not found.</Body>
+        <Button title="Go Back" onPress={() => navigation.goBack()} />
+      </ScreenContainer>
+    );
+  }
 
   return (
     <ScreenContainer padding={false} scrollable={false}>
@@ -61,7 +174,9 @@ export default function EntryDetailEditScreen() {
         {/* Date & Time Section */}
         <View className="px-6 pt-6 pb-4 border-b border-neutral-200">
            <Caption>Date & Time</Caption>
-           <Body className="text-[#2c2926]">Tuesday, April 15, 2025 • 9:42 PM</Body>
+           <Body className="text-[#2c2926]">
+             {existingEntry.date || "Unknown Date"} • {existingEntry.time || "Unknown Time"}
+           </Body>
         </View>
 
         {/* Mood Section */}
@@ -99,51 +214,50 @@ export default function EntryDetailEditScreen() {
         {/* Media Section */}
         <View className="p-6 border-b border-neutral-200 gap-4">
           <Body className="text-[#2c2926]">Media</Body>
-          <View className="flex-row gap-2">
-            <View className="flex-1 h-[101px] bg-[#cbc5bf] rounded-lg justify-center items-center">
-              <ImageIcon color="#fcfbfa" size={24} />
-              <Caption className="text-[#fcfbfa] mt-1">Photo 1</Caption>
+          
+          {(imageUri || audioUri) && (
+            <View className="gap-3">
+              {imageUri && (
+                <View className="w-full h-32 rounded-lg overflow-hidden relative">
+                  <Image source={{ uri: imageUri }} className="w-full h-full" resizeMode="cover" />
+                  <TouchableOpacity 
+                    className="absolute top-2 right-2 bg-[#2c2926] p-1.5 rounded-full"
+                    onPress={() => setImageUri(null)}
+                  >
+                    <X color="white" size={16} />
+                  </TouchableOpacity>
+                </View>
+              )}
+              {audioUri && (
+                <View className="relative mt-2">
+                  <AudioPlayer uri={audioUri} />
+                  <TouchableOpacity 
+                    className="absolute top-2 right-2 bg-[#2c2926] p-1.5 rounded-full z-10"
+                    onPress={() => setAudioUri(null)}
+                  >
+                    <X color="white" size={16} />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
-            <View className="flex-1 h-[101px] bg-[#cbc5bf] rounded-lg justify-center items-center">
-              <ImageIcon color="#fcfbfa" size={24} />
-              <Caption className="text-[#fcfbfa] mt-1">Photo 2</Caption>
-            </View>
-            <View className="flex-1 h-[101px] bg-[#cbc5bf] rounded-lg justify-center items-center">
-              <Mic color="#fcfbfa" size={24} />
-              <Caption className="text-[#fcfbfa] mt-1">Audio</Caption>
-            </View>
-          </View>
+          )}
 
-          {/* Audio Player Mock */}
-          <Card className="flex-row items-center gap-3">
-            <View className="w-10 h-10 bg-[#2c2926] rounded-full justify-center items-center">
-               <View className="w-0 h-0 border-t-[6px] border-t-transparent border-l-[10px] border-l-white border-b-[6px] border-b-transparent ml-1" />
-            </View>
-            <View className="flex-1 gap-2">
-               <View className="w-full h-1 bg-[#e0dddb] rounded-full overflow-hidden">
-                  <View className="w-1/3 h-full bg-[#2c2926]" />
-               </View>
-               <View className="flex-row justify-between">
-                  <Caption>1:23</Caption>
-                  <Caption>3:45</Caption>
-               </View>
-            </View>
-          </Card>
-
-          <View className="flex-row gap-2">
+          <View className="flex-row gap-2 mt-2">
             <Button 
               title="Image"
               variant="secondary"
               icon={ImageIcon}
               className="flex-1 h-10 px-4"
               textClassName="text-sm"
+              onPress={pickImage}
             />
             <Button 
-              title="Audio"
-              variant="secondary"
-              icon={Mic}
+              title={isRecording ? "Stop" : "Audio"}
+              variant={isRecording ? "primary" : "secondary"}
+              icon={isRecording ? Square : Mic}
               className="flex-1 h-10 px-4"
               textClassName="text-sm"
+              onPress={toggleRecording}
             />
           </View>
         </View>
@@ -204,6 +318,7 @@ export default function EntryDetailEditScreen() {
             title="Delete"
             variant="secondary"
             icon={Trash2}
+            onPress={handleDelete}
           />
         </View>
       </ScrollView>

@@ -8,7 +8,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Provider } from 'react-redux';
 
 // Global Store and Context
-import { store } from './src/store';
+import { store, persistor } from './src/store';
+import { PersistGate } from 'redux-persist/integration/react';
 import { ThemeProvider } from './src/context/ThemeContext';
 
 // Import the new modular RootNavigator
@@ -41,19 +42,21 @@ export default function App() {
 
   return (
     <Provider store={store}>
-      <ThemeProvider>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <SafeAreaProvider>
-            <NavigationContainer>
-              {/* 
-                RootNavigator contains the entire navigation tree:
-                Auth Flow -> Setup -> Drawer (which contains Tabs)
-              */}
-              <RootNavigator />
-            </NavigationContainer>
-          </SafeAreaProvider>
-        </GestureHandlerRootView>
-      </ThemeProvider>
+      <PersistGate loading={null} persistor={persistor}>
+        <ThemeProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <SafeAreaProvider>
+              <NavigationContainer>
+                {/* 
+                  RootNavigator contains the entire navigation tree:
+                  Auth Flow -> Setup -> Drawer (which contains Tabs)
+                */}
+                <RootNavigator />
+              </NavigationContainer>
+            </SafeAreaProvider>
+          </GestureHandlerRootView>
+        </ThemeProvider>
+      </PersistGate>
     </Provider>
   );
 }
