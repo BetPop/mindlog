@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, TouchableOpacity, ScrollView, TextInput, Text, Image } from 'react-native';
 import { ChevronLeft, Image as ImageIcon, Mic, Square, Trash2 } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useDispatch } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
@@ -13,6 +13,7 @@ import { Body, Subheading, Caption } from '../components/Typography';
 
 export default function NewEntryScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const dispatch = useDispatch();
   const [selectedMood, setSelectedMood] = useState(1);
   const [entryText, setEntryText] = useState('');
@@ -26,7 +27,7 @@ export default function NewEntryScreen() {
   const moods = ['😊', '😌', '😔', '😰', '😡', '😴'];
 
   const handleSave = () => {
-    const date = new Date();
+    const date = route.params?.date ? new Date(route.params.date) : new Date();
     
     dispatch(addEntry({
       title: entryText ? (entryText.substring(0, 30) + (entryText.length > 30 ? '...' : '')) : 'New Journal Entry',

@@ -54,10 +54,14 @@ export default function HomeScreen() {
     });
   }, []);
 
+  const hasFetchedRef = React.useRef(false);
+
   const loadData = useCallback(async () => {
     // Only fetch if store is empty (as a demo of API integration)
-    if (entries.length > 5) return; 
+    // Prevent infinite loops by using a ref to track if we've already fetched
+    if (entries.length > 5 || hasFetchedRef.current) return; 
 
+    hasFetchedRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -74,6 +78,7 @@ export default function HomeScreen() {
       });
     } catch (err) {
       setError(err.message);
+      hasFetchedRef.current = false; // Allow retry on error
     } finally {
       setLoading(false);
     }

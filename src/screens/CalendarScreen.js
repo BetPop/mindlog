@@ -133,7 +133,7 @@ export default function CalendarScreen() {
             <Button 
               icon={Plus}
               className="w-10 h-10 px-0"
-              onPress={() => navigation.navigate(SCREENS.NEW_ENTRY)}
+              onPress={() => navigation.navigate(SCREENS.NEW_ENTRY, { date: selectedDate.toISOString() })}
             />
           }
         />
